@@ -2,8 +2,9 @@ name: Lawn Water Notification
 
 on:
   schedule:
-    # 7:00 AM and 7:00 PM EST (calculated in UTC)
-    - cron: '0 11,23 * * *' 
+    # 6:51 AM and 6:51 PM EST (America/New_York timezone)
+    - cron: '51 6,18 * * *'
+      timezone: America/New_York
   workflow_dispatch: # Allows you to run it manually for testing
 
 jobs:
