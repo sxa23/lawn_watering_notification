@@ -1,0 +1,25 @@
+name: Lawn Water Notification
+
+on:
+  schedule:
+    # 7:00 AM and 7:00 PM EST (calculated in UTC)
+    - cron: '0 11,23 * * *' 
+  workflow_dispatch: # Allows you to run it manually for testing
+
+jobs:
+  run-water-script:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Execute script
+        run: python scripts/lawn_watering_check.py
