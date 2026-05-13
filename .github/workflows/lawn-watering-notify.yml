@@ -27,3 +27,9 @@ jobs:
           ZIP_CODE: ${{ secrets.ZIP_CODE }}
           COUNTRY_CODE: ${{ secrets.COUNTRY_CODE }}
         run: python scripts/lawn_watering_check.py
+      # This step only runs if the 'Execute script' step fails
+      - name: Notify on Failure
+        if: failure()
+        run: |
+          curl -d "❌ Lawn Water Script Failed! Check GitHub Actions logs for details." \
+                https://ntfy.sh/${{ secrets.NTFY_TOPIC }}
