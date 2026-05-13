@@ -38,28 +38,44 @@ def check_weather():
     zip_code = _required_env("ZIP_CODE")
     country_code = _required_env("COUNTRY_CODE")
     lat, lon = lat_lon_from_zip(zip_code, country_code=country_code)
-    # This URL requests the past 2 hours, current hour, and next 2 hours of precipitation data
-    # for the specified latitude and longitude from the Open-Meteo API, returning results in the local timezone.
-    # It fetches hourly precipitation data.
-    url = (
-        "https://api.open-meteo.com/v1/forecast"
-        f"?latitude={lat}&longitude={lon}"
-        "&hourly=precipitation"
-        "&past_hours=2&forecast_hours=2"
-        "&timezone=auto"
+    # Past 2h + current + next 2h in local time; hourly precipitation (API default mm unless overridden).
+    resp = requests.get(
+        "https://api.open-meteo.com/v1/forecast",
+        params={
+            "latitude": lat,
+            "longitude": lon,
+            "hourly": "precipitation,temperature_2m",
+            "past_hours": 2,
+            "forecast_hours": 2,
+            "timezone": "auto",
+            "temperature_unit": "fahrenheit",
+            "precipitation_unit": "inch",
+        },
+        timeout=30,
     )
-    resp = requests.get(url, timeout=30)
     resp.raise_for_status()
     response = resp.json()
 
-    today_temp = response["daily"]["temperature_2m_max"][0]
-    today_rain = response["daily"]["precipitation_sum"][0]
+    hourly = response.get("hourly") or {}
+    precip_hours = hourly.get("precipitation") or []
+    temp_hours = hourly.get("temperature_2m") or []
 
-    # Logic: Water if it's hot and hasn't rained much
-    if today_temp > THRESHOLD_TEMP and today_rain < THRESHOLD_RAIN:
-        return f"💧 Water the lawn! It's {today_temp}°F and only {today_rain}in of rain."
-    else:
-        return "🚫 No need to water the lawn today."
+    total_rain = sum(p if p is not None else 0.0 for p in precip_hours)
+    temps = [t for t in temp_hours if t is not None]
+    max_temp = max(temps) if temps else None
+
+    # Logic: Water if it's hot and hasn't rained much (over the hourly window).
+    if (max_temp is not None and max_temp > THRESHOLD_TEMP) or (
+        total_rain < THRESHOLD_RAIN
+    ):
+        return (
+            f"💧 Water the lawn! High around {max_temp:.0f}°F and only "
+            f"{total_rain:.2f}in of rain in the past/current/next few hours."
+        )
+    return (
+        f"🚫 No need to water the lawn today. High around {max_temp:.0f}°F and "
+        f"only {total_rain:.2f}in of rain in the past/current/next few hours."
+    )
 
 
 def send_notification(message):
