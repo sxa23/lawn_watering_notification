@@ -22,4 +22,8 @@ jobs:
         run: pip install requests
 
       - name: Execute script
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          ZIP_CODE: ${{ secrets.ZIP_CODE }}
+          COUNTRY_CODE: ${{ secrets.COUNTRY_CODE }}
         run: python scripts/lawn_watering_check.py
