@@ -38,10 +38,15 @@ def check_weather():
     zip_code = _required_env("ZIP_CODE")
     country_code = _required_env("COUNTRY_CODE")
     lat, lon = lat_lon_from_zip(zip_code, country_code=country_code)
+    # This URL requests the past 2 hours, current hour, and next 2 hours of precipitation data
+    # for the specified latitude and longitude from the Open-Meteo API, returning results in the local timezone.
+    # It fetches hourly precipitation data.
     url = (
         "https://api.open-meteo.com/v1/forecast"
         f"?latitude={lat}&longitude={lon}"
-        "&daily=temperature_2m_max,precipitation_sum&timezone=auto"
+        "&hourly=precipitation"
+        "&past_hours=2&forecast_hours=2"
+        "&timezone=auto"
     )
     resp = requests.get(url, timeout=30)
     resp.raise_for_status()
