@@ -43,7 +43,9 @@ def check_weather():
         f"?latitude={lat}&longitude={lon}"
         "&daily=temperature_2m_max,precipitation_sum&timezone=auto"
     )
-    response = requests.get(url).json()
+    resp = requests.get(url, timeout=30)
+    resp.raise_for_status()
+    response = resp.json()
 
     today_temp = response["daily"]["temperature_2m_max"][0]
     today_rain = response["daily"]["precipitation_sum"][0]
