@@ -1,8 +1,14 @@
+"""Fetch local weather from Open-Meteo and ntfy when lawn watering may be needed."""
+
 import os
+
 import requests
 
 THRESHOLD_TEMP = 80  # Fahrenheit
 THRESHOLD_RAIN = 0.1  # Inches
+
+GEOCODING_URL = "https://geocoding-api.open-meteo.com/v1/search"
+FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 
 
 def _required_env(name: str) -> str:
@@ -15,7 +21,7 @@ def _required_env(name: str) -> str:
 def lat_lon_from_zip(zip_code: str, *, country_code: str = "US") -> tuple[float, float]:
     """Resolve WGS84 coordinates from a postal code via Open-Meteo geocoding."""
     resp = requests.get(
-        "https://geocoding-api.open-meteo.com/v1/search",
+        GEOCODING_URL,
         params={
             "name": zip_code.strip(),
             "count": 1,
@@ -34,13 +40,29 @@ def lat_lon_from_zip(zip_code: str, *, country_code: str = "US") -> tuple[float,
     return float(loc["latitude"]), float(loc["longitude"])
 
 
-def check_weather():
+def _summarize_hourly(hourly: dict) -> tuple[float, float | None]:
+    """Return (total_precip_inches, max_temp_f) from hourly series; None temps ignored for max."""
+    precip_hours = hourly.get("precipitation") or []
+    temp_hours = hourly.get("temperature_2m") or []
+
+    total_rain = sum(p if p is not None else 0.0 for p in precip_hours)
+    temps = [t for t in temp_hours if t is not None]
+    max_temp = max(temps) if temps else None
+    return total_rain, max_temp
+
+
+def _format_temp(max_temp: float | None) -> str:
+    return f"{max_temp:.0f}°F" if max_temp is not None else "N/A"
+
+
+def check_weather() -> str:
+    """Return a human-readable line about whether to water, using past/current/next few hours."""
     zip_code = _required_env("ZIP_CODE")
     country_code = _required_env("COUNTRY_CODE")
     lat, lon = lat_lon_from_zip(zip_code, country_code=country_code)
-    # Past 2h + current + next 2h in local time; hourly precipitation (API default mm unless overridden).
+
     resp = requests.get(
-        "https://api.open-meteo.com/v1/forecast",
+        FORECAST_URL,
         params={
             "latitude": lat,
             "longitude": lon,
@@ -54,31 +76,31 @@ def check_weather():
         timeout=30,
     )
     resp.raise_for_status()
-    response = resp.json()
+    hourly = resp.json().get("hourly") or {}
 
-    hourly = response.get("hourly") or {}
-    precip_hours = hourly.get("precipitation") or []
-    temp_hours = hourly.get("temperature_2m") or []
+    total_rain, max_temp = _summarize_hourly(hourly)
 
-    total_rain = sum(p if p is not None else 0.0 for p in precip_hours)
-    temps = [t for t in temp_hours if t is not None]
-    max_temp = max(temps) if temps else None
+    # Alert when either threshold trips: hot spell or little rain in the window.
+    is_hot = max_temp is not None and max_temp > THRESHOLD_TEMP
+    is_dry = total_rain < THRESHOLD_RAIN
+    should_water = is_hot or is_dry
 
-    # Logic: Water if it's hot and hasn't rained much (over the hourly window).
-    if (max_temp is not None and max_temp > THRESHOLD_TEMP) or (
-        total_rain < THRESHOLD_RAIN
-    ):
+    temp_label = _format_temp(max_temp)
+    rain_label = f"{total_rain:.2f}in"
+    window = "past/current/next few hours"
+
+    if should_water:
         return (
-            f"💧 Water the lawn! High around {max_temp:.0f}°F and only "
-            f"{total_rain:.2f}in of rain in the past/current/next few hours."
+            f"💧 Water the lawn! High around {temp_label} and only {rain_label} of rain "
+            f"in the {window}."
         )
     return (
-        f"🚫 No need to water the lawn today. High around {max_temp:.0f}°F and "
-        f"only {total_rain:.2f}in of rain in the past/current/next few hours."
+        f"🚫 No need to water the lawn today. High around {temp_label} and "
+        f"only {rain_label} of rain in the {window}."
     )
 
 
-def send_notification(message):
+def send_notification(message: str) -> None:
     topic = _required_env("NTFY_TOPIC")
     requests.post(f"https://ntfy.sh/{topic}", data=message.encode("utf-8"))
 
