@@ -1,7 +1,11 @@
 """Fetch local weather from Open-Meteo and ntfy when lawn watering may be needed."""
 
+import logging
 import os
+
 import requests
+
+logger = logging.getLogger(__name__)
 
 THRESHOLD_TEMP = 80  # Fahrenheit
 THRESHOLD_RAIN = 0.1  # Inches
@@ -74,6 +78,12 @@ def check_weather() -> str:
         },
         timeout=30,
     )
+    logger.info("Open-Meteo forecast URL: %s", resp.url)
+    logger.info(
+        "Open-Meteo forecast response: status=%s body=%s",
+        resp.status_code,
+        resp.text,
+    )
     resp.raise_for_status()
     hourly = resp.json().get("hourly") or {}
 
@@ -105,6 +115,7 @@ def send_notification(message: str) -> None:
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     result = check_weather()
     print(result)
     send_notification(result)
