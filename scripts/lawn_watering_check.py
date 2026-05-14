@@ -1,7 +1,6 @@
 """Fetch local weather from Open-Meteo and ntfy when lawn watering may be needed."""
 
 import os
-
 import requests
 
 THRESHOLD_TEMP = 80  # Fahrenheit
