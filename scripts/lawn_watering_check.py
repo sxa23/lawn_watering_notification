@@ -1,7 +1,5 @@
 """Fetch local weather from Open-Meteo and ntfy when lawn watering may be needed."""
 
-from __future__ import annotations
-
 import os
 import requests
 
