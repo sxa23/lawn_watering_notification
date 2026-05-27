@@ -4,6 +4,8 @@ import logging
 import os
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 logger = logging.getLogger(__name__)
 
@@ -12,6 +14,32 @@ THRESHOLD_RAIN = 0.1  # Inches
 
 GEOCODING_URL = "https://geocoding-api.open-meteo.com/v1/search"
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
+
+_SESSION: requests.Session | None = None
+
+
+def _http() -> requests.Session:
+    global _SESSION
+    if _SESSION is None:
+        retry = Retry(
+            total=5,
+            connect=5,
+            read=5,
+            status=5,
+            backoff_factor=0.8,
+            status_forcelist=(429, 500, 502, 503, 504),
+            allowed_methods=frozenset({"GET"}),
+            raise_on_status=False,
+            respect_retry_after_header=True,
+        )
+        adapter = HTTPAdapter(max_retries=retry)
+
+        session = requests.Session()
+        session.mount("https://", adapter)
+        session.mount("http://", adapter)
+        _SESSION = session
+
+    return _SESSION
 
 
 def _required_env(name: str) -> str:
@@ -23,7 +51,7 @@ def _required_env(name: str) -> str:
 
 def lat_lon_from_zip(zip_code: str, *, country_code: str = "US") -> tuple[float, float]:
     """Resolve WGS84 coordinates from a postal code via Open-Meteo geocoding."""
-    resp = requests.get(
+    resp = _http().get(
         GEOCODING_URL,
         params={
             "name": zip_code.strip(),
@@ -64,7 +92,7 @@ def check_weather() -> str:
     country_code = _required_env("COUNTRY_CODE")
     lat, lon = lat_lon_from_zip(zip_code, country_code=country_code)
 
-    resp = requests.get(
+    resp = _http().get(
         FORECAST_URL,
         params={
             "latitude": lat,
@@ -111,7 +139,7 @@ def check_weather() -> str:
 
 def send_notification(message: str) -> None:
     topic = _required_env("NTFY_TOPIC")
-    requests.post(f"https://ntfy.sh/{topic}", data=message.encode("utf-8"))
+    _http().post(f"https://ntfy.sh/{topic}", data=message.encode("utf-8"), timeout=30)
 
 
 if __name__ == "__main__":
