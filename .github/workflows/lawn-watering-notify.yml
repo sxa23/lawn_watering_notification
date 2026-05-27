@@ -1,10 +1,11 @@
 name: Lawn Water Notification
 
 on:
-  schedule:
-    # 6:51 AM and 6:51 PM EST (America/New_York timezone)
-    - cron: '51 6,18 * * *'
-      timezone: America/New_York
+  # Disable schedule for now
+  # schedule:
+  #   # 6:51 AM and 6:51 PM EST (America/New_York timezone)
+  #   - cron: '51 6,18 * * *'
+  #     timezone: America/New_York
   workflow_dispatch: # Allows you to run it manually for testing
 
 jobs:
